@@ -1479,6 +1479,9 @@ Details:
 - **3a. The selected student is already inactive, or becomes inactive before the confirmed request is applied:**
   - 3a1. After checking the caller's authorization, the system reports that the student is already inactive and leaves the account, team membership, and stored work unchanged.
   - 3a2. Use case ends; repeating an authorized deactivation has no additional effect.
+- **4a. The course admin or instructor cancels or dismisses the warning before confirming:**
+  - 4a1. The system closes the warning without sending a deactivation request and leaves the student's account, membership, and submitted work unchanged.
+  - 4a2. The system returns to the student details; use case ends.
 - **6a. The student is already logged in when deactivation completes:**
   - 6a1. The system denies subsequent protected requests according to FR-SEC-active-account, even when the student presents an unexpired token issued before deactivation.
   - 6a2. The deactivation remains effective; the instructor receives the confirmation in step 6.
