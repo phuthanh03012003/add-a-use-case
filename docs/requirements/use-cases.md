@@ -1473,11 +1473,16 @@ Details:
 7. Use case ends.
 
 **Extensions:**
+- **6a. The student is already logged in when deactivation completes:**
+  - 6a1. The system denies subsequent protected requests according to FR-SEC-active-account, even when the student presents an unexpired token issued before deactivation.
+  - 6a2. The deactivation remains effective; the instructor receives the confirmation in step 6.
+
 **Priority:** Low
 **Frequency of Use:** Rare. Occurs occasionally when a student withdraws from a course section.
 **Business Rules:** BR-student-lifecycle; BR-student-inactive-team-membership; BR-evaluation-active-evaluatee; BR-submission-owed; BR-evaluation-inactive-history
 
 **Associated Information:**
+- Access revocation follows FR-SEC-active-account. The warning in step 4 includes its effect on an existing login; access does not wait for the current token to expire.
 - The warning in step 4 includes the historical report consequences governed by BR-evaluation-inactive-history.
 - The warning in step 4 includes the evaluation consequences governed by BR-evaluation-active-evaluatee and the submission and reminder obligations governed by BR-submission-owed.
 - Team membership on deactivation is governed by BR-student-inactive-team-membership. The warning in step 4 includes the effect on team membership.
