@@ -43,6 +43,8 @@ class EvaluationServiceTest {
     @Mock
     SectionRepository sectionRepository;
     @Mock
+    team.projectpulse.student.StudentService studentService;
+    @Mock
     Clock clock; // Mock the clock bean
 
     @InjectMocks
@@ -306,6 +308,7 @@ class EvaluationServiceTest {
 
         PeerEvaluation newPeerEvaluation = new PeerEvaluation("2023-W31", amanda, woody, List.of(), "public comment", "private comment");
         given(this.evaluationRepository.save(newPeerEvaluation)).willReturn(newPeerEvaluation);
+        given(this.studentService.findStudentForUpdate(woody.getId())).willReturn(woody);
 
         // When
         PeerEvaluation savedPeerEvaluation = this.evaluationService.addPeerEvaluation(newPeerEvaluation);
