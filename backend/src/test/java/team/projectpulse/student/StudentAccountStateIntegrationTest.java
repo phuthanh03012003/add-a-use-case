@@ -111,6 +111,33 @@ class StudentAccountStateIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    void committedInstructorDeactivationRejectsItsRealTokenAndNewLogin() throws Exception {
+        String email = "instructor-state-" + UUID.randomUUID() + "@abc.edu";
+        Integer id = this.transactions.execute(status -> {
+            var instructor = new team.projectpulse.instructor.Instructor(email, "Account", "Instructor", email,
+                    this.passwordEncoder.encode("Abc12345"), true, "instructor");
+            this.entityManager.persist(instructor);
+            return instructor.getId();
+        });
+        try {
+            var login = this.mockMvc.perform(post(this.baseUrl + "/users/login").with(httpBasic(email, "Abc12345")))
+                    .andExpect(status().isOk()).andReturn();
+            String token = new JSONObject(login.getResponse().getContentAsString()).getJSONObject("data").getString("token");
+            this.mockMvc.perform(get(this.baseUrl + "/instructors/" + id).header("Authorization", "Bearer " + token))
+                    .andExpect(status().isOk());
+            this.transactions.executeWithoutResult(status -> this.entityManager.find(
+                    team.projectpulse.instructor.Instructor.class, id).setEnabled(false));
+            this.mockMvc.perform(get(this.baseUrl + "/instructors/" + id).header("Authorization", "Bearer " + token))
+                    .andExpect(status().isUnauthorized()).andExpect(jsonPath("$.flag").value(false));
+            this.mockMvc.perform(post(this.baseUrl + "/users/login").with(httpBasic(email, "Abc12345")))
+                    .andExpect(status().isUnauthorized());
+        } finally {
+            this.transactions.executeWithoutResult(status -> this.entityManager.remove(
+                    this.entityManager.find(team.projectpulse.instructor.Instructor.class, id)));
+        }
+    }
+
+    @Test
     void accountLookupSeesCommittedStateInsteadOfCallersOlderSnapshot() {
         this.transactions.executeWithoutResult(status -> {
             Student cached = this.entityManager.find(Student.class, this.studentId);
