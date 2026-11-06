@@ -1473,6 +1473,9 @@ Details:
 7. Use case ends.
 
 **Extensions:**
+- **2a. The caller is not authorized to deactivate the selected student:**
+  - 2a1. The system denies the operation under BR-student-lifecycle and BR-section-scoped-access, reports that permission is denied, and changes no account, membership, or submitted work (FR-SEC-deny-unauthorized).
+  - 2a2. Use case ends.
 - **3a. The selected student is already inactive, or becomes inactive before the confirmed request is applied:**
   - 3a1. After checking the caller's authorization, the system reports that the student is already inactive and leaves the account, team membership, and stored work unchanged.
   - 3a2. Use case ends; repeating an authorized deactivation has no additional effect.
@@ -1482,9 +1485,10 @@ Details:
 
 **Priority:** Low
 **Frequency of Use:** Rare. Occurs occasionally when a student withdraws from a course section.
-**Business Rules:** BR-student-lifecycle; BR-student-inactive-team-membership; BR-evaluation-active-evaluatee; BR-submission-owed; BR-evaluation-inactive-history
+**Business Rules:** BR-student-lifecycle; BR-section-scoped-access; BR-student-inactive-team-membership; BR-evaluation-active-evaluatee; BR-submission-owed; BR-evaluation-inactive-history
 
 **Associated Information:**
+- Authorization follows FR-SEC-authorization and is checked for the selected student on every deactivation request, including repeated requests and direct requests that bypass the user interface. Authorization is checked before reporting the student's inactive status.
 - Access revocation follows FR-SEC-active-account. The warning in step 4 includes its effect on an existing login; access does not wait for the current token to expire.
 - The warning in step 4 includes the historical report consequences governed by BR-evaluation-inactive-history.
 - The warning in step 4 includes the evaluation consequences governed by BR-evaluation-active-evaluatee and the submission and reminder obligations governed by BR-submission-owed.
