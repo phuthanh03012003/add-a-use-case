@@ -151,30 +151,16 @@ class StudentServiceTest {
     }
 
     @Test
-    void testInstructorUpdatesStudent() {
-        // Given
-        Student update = new Student("john", "John (updated)", "Smith (updated)", "j.smith@abc.edu (updated)", "", false, "admin student");
+    void testInstructorCannotDeactivateThroughProfileUpdate() {
+        // UC-STU-deactivate-student step 4: the dedicated action owns deactivation.
+        Student update = new Student("changed", "Changed", "Name", "changed@abc.edu", "", false, "student");
         given(this.studentRepository.findById(1)).willReturn(Optional.of(this.students.get(0)));
-        given(this.studentRepository.save(any(Student.class))).willReturn(this.students.get(0));
-
-        Instructor instructor = new Instructor();
-        instructor.setRoles("instructor");
-        MyUserPrincipal myUserPrincipal = new MyUserPrincipal(instructor);
-
-        SecurityContext securityContext = SecurityContextHolder.createEmptyContext();
-        securityContext.setAuthentication(new UsernamePasswordAuthenticationToken(myUserPrincipal, null, myUserPrincipal.getAuthorities()));
-        SecurityContextHolder.setContext(securityContext);
-
-        // When
-        Student result = this.studentService.updateStudent(1, update);
-
-        // Then
-        assertThat(result.getUsername()).isEqualTo(update.getUsername());
-        assertThat(result.getFirstName()).isEqualTo(update.getFirstName());
-        assertThat(result.getLastName()).isEqualTo(update.getLastName());
-        assertThat(result.getEmail()).isEqualTo(update.getEmail());
-//        assertThat(result.getRoles()).isEqualTo(update.getRoles());
-        assertThat(result.isEnabled()).isEqualTo(update.isEnabled());
+        given(this.userUtils.hasRole("ROLE_instructor")).willReturn(true);
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> this.studentService.updateStudent(1, update))
+                .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("Deactivate student");
+        assertThat(this.students.get(0).getFirstName()).isEqualTo("John");
+        assertThat(this.students.get(0).isEnabled()).isTrue();
+        verify(this.studentRepository, never()).save(any());
     }
 
     @Test

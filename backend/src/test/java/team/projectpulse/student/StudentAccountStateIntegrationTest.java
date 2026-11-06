@@ -90,8 +90,12 @@ class StudentAccountStateIntegrationTest extends AbstractIntegrationTest {
         var token = this.jwtDecoder.decode(raw);
         assertThat(this.validator.validate(token).hasErrors()).isFalse();
 
-        this.transactions.executeWithoutResult(status ->
-                this.studentService.findStudentForUpdate(this.studentId).setEnabled(false));
+        var admin = this.mockMvc.perform(post(this.baseUrl + "/users/login")
+                .with(httpBasic("b.wei@abc.edu", "123456"))).andReturn();
+        String adminToken = new JSONObject(admin.getResponse().getContentAsString()).getJSONObject("data").getString("token");
+        this.mockMvc.perform(post(this.baseUrl + "/students/" + this.studentId + "/deactivate")
+                        .header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.outcome").value("deactivated"));
 
         assertThat(this.validator.validate(token).hasErrors()).isTrue();
         assertThatThrownBy(() -> this.jwtDecoder.decode(raw)).isInstanceOf(JwtValidationException.class);

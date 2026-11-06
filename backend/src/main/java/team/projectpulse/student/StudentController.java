@@ -4,6 +4,7 @@ import team.projectpulse.student.converter.StudentDtoToStudentConverter;
 import team.projectpulse.student.converter.StudentRegistrationToStudentConverter;
 import team.projectpulse.student.converter.StudentToStudentDtoConverter;
 import team.projectpulse.student.dto.StudentDto;
+import team.projectpulse.student.dto.StudentDeactivationDto;
 import team.projectpulse.student.dto.StudentRegistrationRequest;
 import team.projectpulse.system.Result;
 import team.projectpulse.system.StatusCode;
@@ -74,6 +75,15 @@ public class StudentController {
     public Result deleteStudent(@PathVariable Integer studentId) {
         this.studentService.deleteStudent(studentId);
         return new Result(true, StatusCode.SUCCESS, "Delete student successfully", null);
+    }
+
+    @PostMapping("/{studentId}/deactivate")
+    public Result deactivateStudent(@PathVariable Integer studentId) {
+        StudentService.Deactivation result = this.studentService.deactivateStudent(studentId);
+        StudentDto student = this.studentToStudentDtoConverter.convert(result.student());
+        return new Result(true, StatusCode.SUCCESS,
+                result.alreadyInactive() ? "Student is already inactive." : "Student deactivated successfully.",
+                new StudentDeactivationDto(student, result.alreadyInactive() ? "already-inactive" : "deactivated"));
     }
 
 }

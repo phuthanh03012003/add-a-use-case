@@ -14,6 +14,7 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
@@ -96,6 +97,19 @@ public class StudentService {
         this.entityManager.refresh(student, LockModeType.PESSIMISTIC_WRITE);
     }
 
+    public record Deactivation(Student student, boolean alreadyInactive) { }
+
+    public Deactivation deactivateStudent(Integer studentId) {
+        Student student = this.studentRepository.findOne(StudentSpecs.hasId(studentId).and(StudentSpecs.managedBy(
+                this.userUtils.getUserId(), this.userUtils.hasRole("ROLE_admin"),
+                this.userUtils.hasRole("ROLE_instructor"))))
+                .orElseThrow(() -> new AccessDeniedException("No permission."));
+        lockAndRefresh(student);
+        boolean alreadyInactive = !student.isEnabled();
+        student.setEnabled(false);
+        return new Deactivation(student, alreadyInactive);
+    }
+
     public List<Student> findStudentsByTeamId(Integer teamId) {
         return this.studentRepository.findByTeamTeamId(teamId);
     }
@@ -127,6 +141,11 @@ public class StudentService {
     public Student updateStudent(Integer studentId, Student update) {
         Student oldStudent = this.studentRepository.findById(studentId)
                 .orElseThrow(() -> new ObjectNotFoundException("student", studentId));
+
+        if ((this.userUtils.hasRole("ROLE_instructor") || this.userUtils.hasRole("ROLE_admin"))
+                && oldStudent.isEnabled() && !update.isEnabled()) {
+            throw new IllegalArgumentException("Use the dedicated Deactivate student action to deactivate this account.");
+        }
 
         // If the user is not an admin, then the user can only update her username, first rubricName, last rubricName, and email
         oldStudent.setUsername(update.getUsername());
