@@ -1,7 +1,8 @@
 describe('Peer Evaluation Menu Test', () => {
   beforeEach(() => {
+    cy.clock(new Date('2023-08-20T18:00:00Z').getTime(), ['Date'])
     // Use the custom login command to log in before each test
-    cy.login('john', '123456')
+    cy.login('j.smith@abc.edu', '123456')
 
     // Visit the dashboard page after logging in
     cy.visit('/home')

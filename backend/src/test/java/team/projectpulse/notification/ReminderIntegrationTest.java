@@ -86,6 +86,26 @@ class ReminderIntegrationTest extends AbstractIntegrationTest {
         this.studentJohnToken = login("j.smith@abc.edu");
     }
 
+    @Test
+    void testDeactivationRemovesReminderRecipientAndRequiredEvaluatee() throws Exception {
+        // BR-submission-owed: John is missing only Jerry's evaluation before Jerry withdraws.
+        PeerEvaluation missing = this.entityManager.createQuery(
+                "select p from PeerEvaluation p where p.evaluator.id = 4 and p.evaluatee.id = 6 and p.week = :week", PeerEvaluation.class)
+                .setParameter("week", WEEK).getSingleResult();
+        this.entityManager.remove(missing);
+        this.mockMvc.perform(post(this.baseUrl + "/students/6/deactivate")
+                        .header(HttpHeaders.AUTHORIZATION, this.adminBingyangToken))
+                .andExpect(status().isOk());
+        this.mockMvc.perform(get(this.baseUrl + "/sections/2/submission-status")
+                        .param("item", "PEER_EVALUATION").param("week", WEEK)
+                        .header(HttpHeaders.AUTHORIZATION, this.instructorBillToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.teams[*].students[*].id", org.hamcrest.Matchers.not(org.hamcrest.Matchers.hasItems(4, 6))));
+        sendReminders(this.instructorBillToken, "WEEKLY_ACTIVITY_REPORT")
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.sent").value(8));
+        verify(this.emailService, never()).sendReminderEmail(org.mockito.ArgumentMatchers.eq("j.moon@abc.edu"), anyString(), anyString());
+    }
+
     // Main success scenario
 
     @Test

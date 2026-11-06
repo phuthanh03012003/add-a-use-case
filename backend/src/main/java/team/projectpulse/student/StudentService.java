@@ -6,12 +6,15 @@ import team.projectpulse.system.UserUtils;
 import team.projectpulse.system.exception.ObjectNotFoundException;
 import team.projectpulse.user.userinvitation.UserInvitationService;
 import jakarta.transaction.Transactional;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
@@ -28,13 +31,16 @@ public class StudentService {
     private final PasswordEncoder passwordEncoder;
     private final UserUtils userUtils;
 
+    private final EntityManager entityManager;
 
-    public StudentService(StudentRepository studentRepository, SectionRepository sectionRepository, UserInvitationService userInvitationService, PasswordEncoder passwordEncoder, UserUtils userUtils) {
+
+    public StudentService(StudentRepository studentRepository, SectionRepository sectionRepository, UserInvitationService userInvitationService, PasswordEncoder passwordEncoder, UserUtils userUtils, EntityManager entityManager) {
         this.studentRepository = studentRepository;
         this.sectionRepository = sectionRepository;
         this.userInvitationService = userInvitationService;
         this.passwordEncoder = passwordEncoder;
         this.userUtils = userUtils;
+        this.entityManager = entityManager;
     }
 
     public Page<Student> findByCriteria(Map<String, String> searchCriteria, Pageable pageable) {
@@ -76,6 +82,34 @@ public class StudentService {
                 .orElseThrow(() -> new ObjectNotFoundException("student", studentId));
     }
 
+    /**
+     * Shared with evaluation creation: serialize account-state changes and new evaluations through commit.
+     * Refresh under the lock because a DTO converter may have already loaded an older managed Student.
+     * Callers still enforce the operation's ownership/team scope and evaluatee eligibility.
+     */
+    public Student findStudentForUpdate(Integer studentId) {
+        Student student = findStudentById(studentId);
+        lockAndRefresh(student);
+        return student;
+    }
+
+    private void lockAndRefresh(Student student) {
+        this.entityManager.refresh(student, LockModeType.PESSIMISTIC_WRITE);
+    }
+
+    public record Deactivation(Student student, boolean alreadyInactive) { }
+
+    public Deactivation deactivateStudent(Integer studentId) {
+        Student student = this.studentRepository.findOne(StudentSpecs.hasId(studentId).and(StudentSpecs.managedBy(
+                this.userUtils.getUserId(), this.userUtils.hasRole("ROLE_admin"),
+                this.userUtils.hasRole("ROLE_instructor"))))
+                .orElseThrow(() -> new AccessDeniedException("No permission."));
+        lockAndRefresh(student);
+        boolean alreadyInactive = !student.isEnabled();
+        student.setEnabled(false);
+        return new Deactivation(student, alreadyInactive);
+    }
+
     public List<Student> findStudentsByTeamId(Integer teamId) {
         return this.studentRepository.findByTeamTeamId(teamId);
     }
@@ -107,6 +141,11 @@ public class StudentService {
     public Student updateStudent(Integer studentId, Student update) {
         Student oldStudent = this.studentRepository.findById(studentId)
                 .orElseThrow(() -> new ObjectNotFoundException("student", studentId));
+
+        if ((this.userUtils.hasRole("ROLE_instructor") || this.userUtils.hasRole("ROLE_admin"))
+                && oldStudent.isEnabled() && !update.isEnabled()) {
+            throw new IllegalArgumentException("Use the dedicated Deactivate student action to deactivate this account.");
+        }
 
         // If the user is not an admin, then the user can only update her username, first rubricName, last rubricName, and email
         oldStudent.setUsername(update.getUsername());

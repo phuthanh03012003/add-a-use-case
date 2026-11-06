@@ -32,7 +32,12 @@
       scrollbar-always-on
     >
       <el-table-column label="Student" min-width="100px" fixed>
-        <template #default="{ row }"> {{ row.lastName }}, {{ row.firstName }} </template>
+        <template #default="{ row }">
+          {{ row.lastName }}, {{ row.firstName }}
+          <el-tag v-if="row.enabled === false" type="info" data-cy="evaluation-inactive"
+            >Inactive</el-tag
+          >
+        </template>
       </el-table-column>
       <el-table-column label="Average Total Score" min-width="100px" fixed>
         <template #default="{ row }">

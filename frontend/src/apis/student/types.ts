@@ -102,3 +102,10 @@ export interface DeleteStudentResponse {
   message: string
   data: null
 }
+
+export interface DeactivateStudentResponse {
+  flag: boolean
+  code: number
+  message: string
+  data: { student: Student; outcome: 'deactivated' | 'already-inactive' }
+}

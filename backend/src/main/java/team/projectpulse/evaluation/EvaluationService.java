@@ -7,6 +7,7 @@ import team.projectpulse.system.exception.PeerEvaluationIllegalArgumentException
 import team.projectpulse.system.exception.ObjectNotFoundException;
 import team.projectpulse.student.Student;
 import team.projectpulse.student.StudentRepository;
+import team.projectpulse.student.StudentService;
 import team.projectpulse.team.Team;
 import jakarta.transaction.Transactional;
 import org.springframework.security.core.Authentication;
@@ -39,13 +40,15 @@ public class EvaluationService {
     private final StudentRepository studentRepository;
     private final SectionRepository sectionRepository;
     private final Clock clock; // Clock bean is defined in PeerEvaluationToolApplication.java, this object is for unit testing purposes.
+    private final StudentService studentService;
 
 
-    public EvaluationService(PeerEvaluationRepository evaluationRepository, StudentRepository studentRepository, SectionRepository sectionRepository, Clock clock) {
+    public EvaluationService(PeerEvaluationRepository evaluationRepository, StudentRepository studentRepository, SectionRepository sectionRepository, Clock clock, StudentService studentService) {
         this.evaluationRepository = evaluationRepository;
         this.studentRepository = studentRepository;
         this.sectionRepository = sectionRepository;
         this.clock = clock;
+        this.studentService = studentService;
     }
 
     public PeerEvaluation addPeerEvaluation(PeerEvaluation newPeerEvaluation) {
@@ -72,6 +75,15 @@ public class EvaluationService {
             throw new PeerEvaluationIllegalArgumentException("You have already submitted an evaluation for " + newPeerEvaluation.getEvaluatee().getFirstName() + " in this week.");
         }
 
+        // BR-evaluation-active-evaluatee: the shared row lock orders this save against deactivation.
+        Student evaluatee = this.studentService.findStudentForUpdate(newPeerEvaluation.getEvaluatee().getId());
+        if (!evaluatee.isEnabled()) {
+            throw new PeerEvaluationIllegalArgumentException("This student is inactive and cannot receive a new peer evaluation.");
+        }
+        if (evaluatee.getTeam() == null || !evaluatorTeamId.equals(evaluatee.getTeam().getTeamId())) {
+            throw new PeerEvaluationIllegalArgumentException("The evaluator and evaluatee must be on the same team.");
+        }
+        newPeerEvaluation.setEvaluatee(evaluatee);
         return this.evaluationRepository.save(newPeerEvaluation);
     }
 
@@ -174,6 +186,7 @@ public class EvaluationService {
         PeerEvaluationAverage peerEvaluationAverage = new PeerEvaluationAverage();
 
         peerEvaluationAverage.setStudentId(student.getId());
+        peerEvaluationAverage.setEnabled(student.isEnabled());
         peerEvaluationAverage.setWeek(week);
         peerEvaluationAverage.setFirstName(student.getFirstName());
         peerEvaluationAverage.setLastName(student.getLastName());
@@ -221,7 +234,10 @@ public class EvaluationService {
         report.setSectionName(this.sectionRepository.findById(sectionId).orElseThrow(() -> new ObjectNotFoundException("section", sectionId)).getSectionName());
 
         // Get all students in the section
-        List<Student> students = this.studentRepository.findBySectionSectionId(sectionId).stream().filter(student -> student.getTeam() != null).collect(Collectors.toList());
+        Set<Integer> received = new HashSet<>(this.evaluationRepository.findReceivedEvaluateeIds(sectionId, week));
+        List<Student> students = this.studentRepository.findBySectionSectionId(sectionId).stream()
+                .filter(student -> student.isEnabled() ? student.getTeam() != null : received.contains(student.getId()))
+                .toList();
 
         // For each student, compute her average total score, collect all public comments and private comments, and compute rating averages for each criterion.
         students.forEach(student -> {

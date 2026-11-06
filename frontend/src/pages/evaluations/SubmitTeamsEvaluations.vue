@@ -102,24 +102,33 @@
         <el-empty description="No data is available." />
       </template>
     </el-table>
+    <el-alert
+      v-if="saveNotice"
+      :title="saveNotice"
+      type="warning"
+      :closable="false"
+      data-cy="evaluation-save-notice"
+    />
+    <el-button v-if="refreshRequired" @click="recoverEntries" data-cy="evaluation-reload"
+      >Reload evaluations</el-button
+    >
     <!-- submit button on the right side-->
     <div style="display: flex; justify-content: flex-end">
       <el-button
         type="primary"
-        @click="submitPeerEvaluations"
-        v-if="isNewSubmission"
+        @click="savePeerEvaluations"
         :loading="isLoading"
-        >Submit</el-button
+        :disabled="isLoading || refreshRequired || !peerEvalutions.length"
+        data-cy="evaluation-save"
       >
-      <el-button type="warning" @click="updatePeerEvaluations" :loading="isLoading" v-else
-        >Update</el-button
-      >
+        {{ isNewSubmission ? 'Submit' : 'Update' }}
+      </el-button>
     </div>
   </el-card>
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { onMounted, ref, computed } from 'vue'
 import { findStudentsByTeamId } from '@/apis/student'
 import type { Student, FindStudentByTeamIdResponse } from '@/apis/student/types'
 import { findSectionById } from '@/apis/section'
@@ -135,22 +144,18 @@ import {
   sendPeerEvaluationSubmissionConfirmationEmail
 } from '@/apis/evaluation'
 import { ElMessage } from 'element-plus'
-import type {
-  FetchPeerEvaluationsResponse,
-  PeerEvaluation,
-  Rating,
-  SubmitPeerEvaluationResponse,
-  UpdatePeerEvaluationResponse
-} from '@/apis/evaluation/types'
+import type { FetchPeerEvaluationsResponse, PeerEvaluation, Rating } from '@/apis/evaluation/types'
 
 const previousWeek = ref<string>('')
 const previousWeekRange = ref<string>('')
 
-const peerEvalutions = ref<PeerEvaluation[]>()
+const peerEvalutions = ref<PeerEvaluation[]>([])
+const refreshRequired = ref(false)
+const saveNotice = ref('')
 
 const loading = ref<boolean>(false)
 
-let isNewSubmission = true // Flag to indicate if this is a new submission or an update
+const isNewSubmission = computed(() => peerEvalutions.value.every((entry) => !entry.evaluationId))
 
 const teamId = ref<number>(NaN) // Team ID of the student
 
@@ -174,7 +179,7 @@ onMounted(async () => {
   sectionId.value = (userInfoStore.userInfo as Student).sectionId
   await loadCriteria()
   loading.value = true
-  prepareStartingPeerEvaluations()
+  await prepareStartingPeerEvaluations()
   loading.value = false
 })
 
@@ -195,66 +200,93 @@ async function loadCriteria() {
 }
 
 // Create starting peer evaluations
-async function prepareStartingPeerEvaluations() {
-  // Get the evaluations for the current week
+async function prepareStartingPeerEvaluations(preserveUnsaved = false) {
   const result: FetchPeerEvaluationsResponse = await getEvaluationsByEvaluatorIdAndWeek(
     (userInfoStore.userInfo as Student).id as number,
     previousWeek.value
   )
+  const savedIds = new Set(result.data.map((entry) => entry.evaluateeId))
+  const drafts = new Map(
+    (preserveUnsaved ? peerEvalutions.value : []).map((entry) => [entry.evaluateeId, entry])
+  )
+  // Existing evaluations remain editable under their submission-window rules, even for inactive students.
+  peerEvalutions.value = [
+    ...result.data.map((stored) => {
+      const draft = drafts.get(stored.evaluateeId)
+      // A failed update must not discard typed feedback. Identity comes from the refreshed server row.
+      return draft && draft.evaluationId === stored.evaluationId
+        ? {
+            ...stored,
+            ratings: draft.ratings,
+            publicComment: draft.publicComment,
+            privateComment: draft.privateComment
+          }
+        : stored
+    }),
+    ...students.value
+      .filter((student) => student.enabled && !savedIds.has(student.id as number))
+      .map(
+        (student) =>
+          drafts.get(student.id as number) ?? {
+            week: previousWeek.value,
+            evaluatorId: (userInfoStore.userInfo as Student).id as number,
+            evaluateeId: student.id as number,
+            evaluateeName: `${student.firstName} ${student.lastName}`,
+            ratings: criteria.value.map((criterion) => ({
+              criterionId: criterion.criterionId as number,
+              criterion: criterion.criterion,
+              actualScore: 10
+            })),
+            publicComment: '',
+            privateComment: ''
+          }
+      )
+  ]
+}
 
-  // If the student has already submitted evaluations for the current week, load them
-  if (result.data.length > 0) {
-    peerEvalutions.value = result.data
-    isNewSubmission = false
-  } else {
-    // If not, create a new set of evaluations
-    isNewSubmission = true
-    peerEvalutions.value = students.value.map((student) => ({
-      week: previousWeek.value,
-      evaluatorId: (userInfoStore.userInfo as Student).id as number,
-      evaluateeId: student.id as number,
-      evaluateeName: `${student.firstName} ${student.lastName}`,
-      ratings: criteria.value.map((criterion) => ({
-        criterionId: criterion.criterionId as number,
-        criterion: criterion.criterion,
-        actualScore: 10 // Default score, can be changed by the user
-      })),
-      publicComment: '',
-      privateComment: ''
-    }))
+async function recoverEntries() {
+  refreshRequired.value = true
+  try {
+    await loadStudents()
+    await prepareStartingPeerEvaluations(true)
+    refreshRequired.value = false
+  } catch {
+    saveNotice.value =
+      'Reload evaluations before trying again; the last request outcome is uncertain.'
   }
 }
 
-// Submit peer evaluations
-async function submitPeerEvaluations() {
-  if (peerEvalutions.value) {
-    const submitPromises = peerEvalutions.value.map(async (evaluation) => {
-      const result: SubmitPeerEvaluationResponse = await submitEvaluation(evaluation)
-      return result.data
-    })
-    isLoading.value = true
-    peerEvalutions.value = await Promise.all(submitPromises) // Wait for all promises to resolve
-    isNewSubmission = false // Change to update mode
-    ElMessage.success('Peer evaluations submitted successfully')
-    isLoading.value = false
-
-    // Send an submission confirmation email to the submitter
-    await sendPeerEvaluationSubmissionConfirmationEmail(previousWeekRange.value)
-    ElMessage.success('A confirmation email has been sent to you.')
-  }
-}
-
-// Update peer evaluations
-async function updatePeerEvaluations() {
-  if (peerEvalutions.value) {
-    const submitPromises = peerEvalutions.value.map(async (evaluation) => {
-      const result: UpdatePeerEvaluationResponse = await updateEvaluation(evaluation)
-      return result.data
-    })
-
-    isLoading.value = true
-    peerEvalutions.value = await Promise.all(submitPromises) // Wait for all promises to resolve
-    ElMessage.success('Peer evaluations updated successfully')
+async function savePeerEvaluations() {
+  if (isLoading.value || refreshRequired.value || !peerEvalutions.value.length) return
+  isLoading.value = true
+  saveNotice.value = ''
+  const hadNewEntries = peerEvalutions.value.some((entry) => !entry.evaluationId)
+  try {
+    const results = await Promise.allSettled(
+      peerEvalutions.value.map(async (entry) => {
+        const response = entry.evaluationId
+          ? await updateEvaluation(entry)
+          : await submitEvaluation(entry)
+        // Preserve known server IDs even if another row fails or the following reload is unavailable.
+        Object.assign(entry, response.data)
+        return response.data
+      })
+    )
+    if (results.some((result) => result.status === 'rejected')) {
+      saveNotice.value =
+        'Some evaluations were not saved. Review the refreshed eligible teammates and saved evaluations before trying again.'
+      await recoverEntries()
+      return
+    }
+    ElMessage.success('Peer evaluations saved successfully')
+    if (hadNewEntries) {
+      try {
+        await sendPeerEvaluationSubmissionConfirmationEmail(previousWeekRange.value)
+      } catch {
+        ElMessage.warning('Evaluations were saved, but the confirmation email could not be sent.')
+      }
+    }
+  } finally {
     isLoading.value = false
   }
 }

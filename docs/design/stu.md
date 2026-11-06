@@ -6,7 +6,7 @@
 
 ## Overview
 
-Extend the existing student vertical slice rather than introducing another account model. The existing `Student` inherits `enabled` from `PeerEvaluationUser`; its optional team and required course section remain the ownership links. Student lookup, DTO conversion, profile editing, and the management dialog already exist. Before this design is implemented, profile editing toggles `enabled`, there is no dedicated deactivation endpoint, and JWT authentication does not consult current account status. This document designs the remaining work; it does not claim those changes are built.
+Extend the existing student vertical slice rather than introducing another account model. The existing `Student` inherits `enabled` from `PeerEvaluationUser`; its optional team and required course section remain the ownership links. Student lookup, DTO conversion, profile editing, and the management dialog already exist. Before this change, profile editing toggled `enabled`, there was no dedicated deactivation endpoint, and JWT authentication did not consult current account status. The implementation now includes the dedicated action, scoped permission checks, current-account JWT validation, and evaluation/report changes described here. See [verification evidence](../verification/stu.md) for the distinction between passed backend and browser checks and the remaining verification limits.
 
 Policy is owned by BR-student-lifecycle, BR-section-scoped-access, BR-student-inactive-team-membership, BR-submission-owed, BR-evaluation-active-evaluatee, and BR-evaluation-inactive-history in [business-rules.md](../requirements/business-rules.md). Reactivation implementation is outside this change.
 
@@ -31,8 +31,8 @@ classDiagram
 |---|---|
 | [StudentController](../../backend/src/main/java/team/projectpulse/student/StudentController.java), [StudentService](../../backend/src/main/java/team/projectpulse/student/StudentService.java), [StudentRepository](../../backend/src/main/java/team/projectpulse/student/StudentRepository.java), [StudentSpecs](../../backend/src/main/java/team/projectpulse/student/StudentSpecs.java), [StudentSecurityService](../../backend/src/main/java/team/projectpulse/student/StudentSecurityService.java) | Reused; add the action, scoped lookup, and lifecycle permission check. |
 | [Student](../../backend/src/main/java/team/projectpulse/student/Student.java), [PeerEvaluationUser](../../backend/src/main/java/team/projectpulse/user/PeerEvaluationUser.java), [StudentDto](../../backend/src/main/java/team/projectpulse/student/dto/StudentDto.java), [DTO converters](../../backend/src/main/java/team/projectpulse/student/converter) | Reused; no persistence-model change. Add a deactivation response DTO containing the converted student and outcome. |
-| `security/authorizationmanagers/StudentLifecycleAuthorizationManager.java` | New; thin wrapper over the student permission service, with fail-closed path-variable parsing. |
-| `security/ActiveAccountJwtValidator.java` | New; additional JWT validation using a current-account lookup by the signed `userId` claim. |
+| [StudentLifecycleAuthorizationManager](../../backend/src/main/java/team/projectpulse/security/authorizationmanagers/StudentLifecycleAuthorizationManager.java) | New; thin wrapper over the student permission service, with fail-closed path-variable parsing. |
+| [ActiveAccountJwtValidator](../../backend/src/main/java/team/projectpulse/security/ActiveAccountJwtValidator.java) | New; additional JWT validation using a current-account lookup by the signed `userId` claim. |
 | [SecurityConfiguration](../../backend/src/main/java/team/projectpulse/security/SecurityConfiguration.java), [UserService](../../backend/src/main/java/team/projectpulse/user/UserService.java), [UserRepository](../../backend/src/main/java/team/projectpulse/user/UserRepository.java) | Reused; wire the validator and route rule; add the account-status service method. |
 | [EvaluationService](../../backend/src/main/java/team/projectpulse/evaluation/EvaluationService.java), [PeerEvaluationRepository](../../backend/src/main/java/team/projectpulse/evaluation/PeerEvaluationRepository.java), [PeerEvaluationAverage](../../backend/src/main/java/team/projectpulse/evaluation/PeerEvaluationAverage.java) | Reused; enforce evaluatee eligibility, select historical report rows, and expose `enabled` in summaries. |
 | [Students.vue](../../frontend/src/pages/students/Students.vue), [EditStudentForm.vue](../../frontend/src/pages/students/EditStudentForm.vue), [student API](../../frontend/src/apis/student/index.ts), [student types](../../frontend/src/apis/student/types.ts) | Reused; dedicated action in the existing details/edit dialog, confirmation, response handling, and parent-table refresh. |
@@ -92,7 +92,7 @@ sequenceDiagram
     Note over Security,Handler: Handler is not invoked
 ```
 
-Keep default JWT signature/time validation and compose the account check with it. Parse `userId` defensively; absent, malformed, nonpositive, out-of-range, deleted, or inactive identities fail authentication. Read through `UserService`, not a feature repository or a cached `enabled` claim. The check applies to student and instructor accounts because FR-SEC-active-account covers both; password authentication continues to use `MyUserPrincipal.isEnabled()`.
+Keep default JWT signature/time validation and compose the account check with it. Parse `userId` defensively; absent, malformed, nonpositive, out-of-range, deleted, or inactive identities fail authentication. Read through `UserService.isAccountEnabled`, which uses a scalar repository query in a new read-only transaction to avoid a caller's stale repeatable-read snapshot, not a feature repository or a cached `enabled` claim. The check applies to student and instructor accounts because FR-SEC-active-account covers both; password authentication continues to use `MyUserPrincipal.isEnabled()`.
 
 The shared Axios `401` handler already clears token/user state and redirects to login. An idle browser receives no push logout; its next protected request is refused. The requirement does not cancel requests authenticated before deactivation commits. A token can be accepted again after reactivation if it is otherwise valid; permanent token revocation is outside this design.
 
@@ -151,7 +151,7 @@ No new tables, columns, account states, or Flyway migration. Reuse the SRS [Busi
 
 Reuse JWT, `AuthorizationManager`, `UserUtils`, `Result`, DTO converters, exception handling, shared Axios, and Element Plus. `SubmissionStatusService` remains the single implementation of BR-submission-owed; verify its behavior after deactivation rather than adding another eligibility definition. The student foundation does not call evaluation or notification services. No new job, email, token store, or notification mechanism is introduced.
 
-The approved Level-1 delta is limited to account-status validation in the authentication runtime view and Security & Compliance section. Those sections explicitly distinguish the design target from today's implementation. General refresh/revocation remains TD-jwt-revocation.
+The approved Level-1 delta is limited to account-status validation in the authentication runtime view and Security & Compliance section. Those sections describe the implemented current-account check and distinguish it from general token revocation. General refresh/revocation remains TD-jwt-revocation.
 
 ## Tests
 
@@ -191,9 +191,9 @@ Rows are named so the implementation PR can map every row to concrete tests. Exp
 
 ## Open questions / risks
 
-- The design gate remains the developer's merge of the design PR; conversation approval authorizes writing this document, not implementing it.
+- The developer merged [design PR #2](https://github.com/phuthanh03012003/add-a-use-case/pull/2) before this implementation branch began.
 - Per-request account reads add database work. There is no stale-status cache; performance should be measured if this becomes material.
 - A request authenticated before deactivation commits may finish afterward; cancelling in-flight operations is outside FR-SEC-active-account's stated boundary.
 - Reactivation remains on the legacy profile path. Existing stale profile updates may affect that path; this change neither redesigns reactivation nor claims old tokens are permanently revoked.
 - Concurrent duplicate deactivations are harmless state assignments. New evaluation saves and deactivation are ordered by the shared student-row lock above. This design does not claim serializable ordering against concurrent legacy reactivation or team transfers.
-- Cypress stubs cannot prove database preservation, server authorization, or token rejection. Those require the listed integration tests and Docker/MySQL; no runtime tests have been run at design time.
+- Cypress stubs cannot prove database preservation, server authorization, or token rejection. Those are proved by the listed integration tests and Docker/MySQL; runtime results are recorded separately in [verification evidence](../verification/stu.md).

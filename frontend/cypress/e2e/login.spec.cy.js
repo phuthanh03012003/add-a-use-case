@@ -6,7 +6,7 @@ describe('Login Page', () => {
 
   it('displays the login page correctly', () => {
     // Check if the login page is rendered
-    cy.contains('h1', 'Login').should('be.visible')
+    cy.contains('h2', 'Login').should('be.visible')
   })
 
   it('shows error messages when fields are empty', () => {
@@ -20,7 +20,7 @@ describe('Login Page', () => {
 
   it('logs in successfully with correct credentials', () => {
     // Fill out the username and password fields
-    cy.get('input[placeholder="Type your username here"]').type('john')
+    cy.get('input[placeholder="Type your username here"]').type('j.smith@abc.edu')
     cy.get('input[placeholder="Type your password here"]').type('123456')
 
     // Submit the form
