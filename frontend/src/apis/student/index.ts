@@ -9,6 +9,7 @@ import type {
   UpdateStudentResponse,
   Student,
   RegistrationParams,
+  DeactivateStudentResponse,
   FindStudentByTeamIdResponse
 } from './types'
 
@@ -39,3 +40,6 @@ export const updateStudent = (updatedStudent: Student) =>
 
 export const deleteStudent = (id: number) =>
   request.delete<any, DeleteStudentResponse>(`${API.STUDENTS_ENDPOINT}/${id}`)
+
+export const deactivateStudent = (id: number) =>
+  request.post<any, DeactivateStudentResponse>(`${API.STUDENTS_ENDPOINT}/${id}/deactivate`)
