@@ -1475,9 +1475,10 @@ Details:
 **Extensions:**
 **Priority:** Low
 **Frequency of Use:** Rare. Occurs occasionally when a student withdraws from a course section.
-**Business Rules:** BR-student-lifecycle; BR-student-inactive-team-membership; BR-evaluation-active-evaluatee; BR-submission-owed
+**Business Rules:** BR-student-lifecycle; BR-student-inactive-team-membership; BR-evaluation-active-evaluatee; BR-submission-owed; BR-evaluation-inactive-history
 
 **Associated Information:**
+- The warning in step 4 includes the historical report consequences governed by BR-evaluation-inactive-history.
 - The warning in step 4 includes the evaluation consequences governed by BR-evaluation-active-evaluatee and the submission and reminder obligations governed by BR-submission-owed.
 - Team membership on deactivation is governed by BR-student-inactive-team-membership. The warning in step 4 includes the effect on team membership.
 - Consequence of the deactivation: The student will no longer be able to log in or submit weekly activity reports and peer evaluations, but the student's account and her previously submitted work are kept in the system. Deactivation will NOT remove the student from the system, and the account can be reactivated in the future (UC-STU-reactivate-student: Reactivate a student). This is distinct from deletion (UC-STU-delete-student: Delete a student), which is a physical, unrecoverable delete. The course admin or instructor shall be able to cancel the use case at any time prior to submitting it.
@@ -2350,9 +2351,10 @@ Report generating algorithm: For each individual criterion score (e.g., Quality 
 
 **Priority:** High
 **Frequency of Use:** Approximately 2 users, average of 1 usage per week.
-**Business Rules:** BR-section-scoped-access (the instructor may generate the report only for a course section she is assigned to), BR-evaluation-private-comment, BR-submission-owed (who has not turned in the peer evaluation)
+**Business Rules:** BR-section-scoped-access (the instructor may generate the report only for a course section she is assigned to), BR-evaluation-private-comment, BR-submission-owed (who has not turned in the peer evaluation); BR-evaluation-inactive-history
 
 **Associated Information:**
+- Inclusion and labeling of inactive students and retention of their evaluation contributions are governed by BR-evaluation-inactive-history.
 
 Report generating parameters:
 - Active week: Each peer evaluation report is associated with a week. The instructor shall first indicate for which active week she wants to generate a peer evaluation. E.g., "02-12-2024 to 02-18-2024"; by default, it shall be the previous week.
