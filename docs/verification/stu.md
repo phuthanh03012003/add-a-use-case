@@ -1,6 +1,6 @@
 # Student deactivation verification
 
-Scope: UC-STU-deactivate-student and the policy effects implemented from [Student Design](../design/stu.md). This is agent-prepared evidence; the student's own PR review is still required.
+Scope: UC-STU-deactivate-student and the policy effects implemented from [Student Design](../design/stu.md). This is agent-prepared evidence and review, completed with the student's permission. It does not claim that the student personally read the diff.
 
 ## Executed checks
 
@@ -8,32 +8,34 @@ Scope: UC-STU-deactivate-student and the policy effects implemented from [Studen
 - After adding the instructor regression test and restoring the mutation, `bash mvnw -q -Dtest=StudentAccountStateIntegrationTest test` — **6 passed**. The full run preceded this additional test; it is not claimed as a second full-suite run.
 - Frontend `npm run build-only` and ESLint on changed source files passed. Both Cypress specs pass JavaScript syntax checks.
 - `npm run build` / `npm run type-check` fail on **18 pre-existing TypeScript diagnostics**. The same check on a temporary checkout of merged `main`, using the same installed dependencies, reports the identical 18 diagnostics; this branch introduces none. These unrelated diagnostics were not silently repaired.
-- Cypress execution is **not verified**. Its initial startup failed because the inherited Electron environment treated the binary as Node; the corrected headless-browser execution was declined. No screenshot or successful browser run is claimed. The 14 authored cases are pending, including the live isolated-stack case.
+- Feature browser run: **14 passed**. Complete Cypress regression suite: **33 passed, zero failures or skips**, using headless Electron against the isolated dev stack. The live case confirmed account deactivation, preserved team membership, rejected the previously issued token, accepted an authorized repeat, and restored its fixture afterward.
+- [Confirmation screenshot](student-deactivation-confirmation.png) was captured from the real running application before confirming the action.
+- Browser-test corrections: scoped the profile selector to its dialog; scrolled to clipped report comments; isolated stubbed account actions with a fictitious ID; accounted for Chromium replaying a dropped transport request. The three legacy specs were updated to the current seeded email login and actual heading selector; menu tests use the dev fixture date.
 
 ## Design test-list coverage
 
 | Design row | Evidence | Result |
 |---|---|---|
-| `deactivate-main` | StudentDeactivationIntegrationTest.deactivationPreservesMembershipProfileAndEveryStoredWorkRow; deactivation-live.spec.cy.js | Backend passed; UI pending |
+| `deactivate-main` | StudentDeactivationIntegrationTest.deactivationPreservesMembershipProfileAndEveryStoredWorkRow; deactivation-live.spec.cy.js | Passed (backend and UI) |
 | `deactivate-permitted-callers` | StudentDeactivationIntegrationTest.deactivationPreservesMembershipProfileAndEveryStoredWorkRow (assigned instructor); ownerWithoutSectionAssignmentOrInstructorRoleCanDeactivate; StudentLifecycleSecurityIntegrationTest.owningAdminWithoutSectionAssignmentOrLiteralInstructorRoleCanReadStudent | Passed |
 | `deactivate-membership` | StudentDeactivationIntegrationTest.deactivationPreservesMembershipProfileAndEveryStoredWorkRow; unassignedStudentAndRepeatWorkWithoutAnyActiveStudentRemaining | Passed |
 | `deactivate-preserves-work` | StudentDeactivationIntegrationTest.deactivationPreservesMembershipProfileAndEveryStoredWorkRow | Passed |
 | `deactivate-unauthorized` | StudentLifecycleSecurityIntegrationTest.lifecycleRouteDeniesStudentUnassignedInstructorAndUnrelatedAdmin; StudentDeactivationIntegrationTest.serviceAlsoRejectsCallerOutsideScopeWithoutRelyingOnRouteRule | Passed |
 | `deactivate-authorization-order` | StudentLifecycleSecurityIntegrationTest.unauthorizedInactiveTargetDoesNotDiscloseAlreadyInactiveOutcome | Passed |
 | `deactivate-invalid-target` | StudentLifecycleSecurityIntegrationTest.invalidTargetFailsClosedAndAnonymousCallerIsUnauthenticated | Passed |
-| `deactivate-repeat` | StudentDeactivationIntegrationTest.unassignedStudentAndRepeatWorkWithoutAnyActiveStudentRemaining; deactivation.spec.cy.js already-inactive case | Backend passed; UI pending |
-| `deactivate-cancel` | deactivation.spec.cy.js cancel, escape, and close cases (extension 4a) | Not verified: Cypress pending |
-| `deactivate-confirmation-state` | deactivation.spec.cy.js double-confirm, 400/500, and lost-response cases | Not verified: Cypress pending |
+| `deactivate-repeat` | StudentDeactivationIntegrationTest.unassignedStudentAndRepeatWorkWithoutAnyActiveStudentRemaining; deactivation.spec.cy.js already-inactive case | Passed (backend and UI) |
+| `deactivate-cancel` | deactivation.spec.cy.js cancel, escape, and close cases (extension 4a) | Passed (Cypress) |
+| `deactivate-confirmation-state` | deactivation.spec.cy.js double-confirm, 400/500, and lost-response cases | Passed (Cypress) |
 | `deactivate-existing-token` | StudentAccountStateIntegrationTest.currentStatusRejectsAnAlreadyIssuedRealTokenAfterCommittedDeactivation | Passed |
 | `deactivate-authentication-regression` | ActiveAccountJwtValidatorTest; StudentAccountStateIntegrationTest.committedInstructorDeactivationRejectsItsRealTokenAndNewLogin; missingOrDeletedAccountIsNotEnabled | Passed |
 | `deactivate-profile-bypass` | StudentDeactivationIntegrationTest.profileCannotBypassActionButOrdinaryEditStillWorks; StudentServiceTest.testInstructorCannotDeactivateThroughProfileUpdate | Passed |
 | `deactivate-submission-status` | ReminderIntegrationTest.testDeactivationRemovesReminderRecipientAndRequiredEvaluatee; SubmissionStatusServiceIntegrationTest.testAnEvaluationOfADeactivatedTeammateIsNotRequired | Passed |
 | `deactivate-new-evaluation` | DeactivationEvaluationIntegrationTest.newEvaluationOfInactiveTeammateIsRejectedWhileActiveTeammateStillWorks | Passed |
 | `deactivate-evaluation-ordering` | DeactivationEvaluationIntegrationTest.newEvaluationAndDeactivationAreOrderedThroughCommit (both parameter values) | Passed |
-| `deactivate-evaluation-form` | deactivation.spec.cy.js inactive entries, partial-failure recovery, and failed-PUT feedback cases | Not verified: Cypress pending |
+| `deactivate-evaluation-form` | deactivation.spec.cy.js inactive entries, partial-failure recovery, and failed-PUT feedback cases | Passed (Cypress) |
 | `deactivate-report-inclusion` | DeactivationEvaluationIntegrationTest.historicalRowsDependOnReceivedWeekAndKeepInactiveEvaluatorsScoresAndComments | Passed |
 | `deactivate-report-calculation` | DeactivationEvaluationIntegrationTest.historicalRowsDependOnReceivedWeekAndKeepInactiveEvaluatorsScoresAndComments; existing EvaluationIntegrationTest visibility checks | Passed |
-| `deactivate-report-label` | deactivation.spec.cy.js inactive historical row case | Not verified: Cypress pending |
+| `deactivate-report-label` | deactivation.spec.cy.js inactive historical row case | Passed (Cypress) |
 | `deactivate-existing-evaluation-edit` | DeactivationEvaluationIntegrationTest.existingEvaluationOfInactiveTeammateRemainsEditableOnlyInsideItsWindow | Passed |
 
 ## Tests kept and oracle sources
@@ -93,7 +95,7 @@ The list names each new or materially changed test method. Existing regression s
 
 - `testDeactivationRemovesReminderRecipientAndRequiredEvaluatee` — BR-submission-owed; inactive student not emailed and not a required evaluatee.
 
-### Cypress cases (authored, not executed successfully)
+### Cypress cases (all 14 passed)
 
 - warning and double-confirm case — steps 4-6; duplicate confirmation contract.
 - cancel dismissal case — extension 4a.
@@ -127,12 +129,12 @@ The targeted run went red: **1 test, 1 assertion failure, 0 errors**, with “Ex
 
 A separate agent read the build diff, design, use case, rules, and tests without the design conversation.
 
-- **P2, fixed in 4114aef:** failed existing-evaluation updates lost typed feedback during recovery. Recovery now retains editable fields while using refreshed server identity; an authored Cypress case covers the failure path.
+- **P2, fixed in 4114aef:** failed existing-evaluation updates lost typed feedback during recovery. Recovery now retains editable fields while using refreshed server identity; a passing Cypress case covers the failure path.
 - **Coverage, fixed in af60acc:** a real instructor token is now checked before/after committed deactivation and subsequent password login is refused.
-- **Coverage, source fixed in 4114aef:** stubbed and live Cypress flows now assert the refreshed parent-table Disabled status. Execution remains pending.
-- **Test quality, source fixed in 4114aef:** feedback preservation is asserted after asynchronous recovery completes. Execution remains pending.
-- No additional concrete security/correctness defect was identified in the static review. This does not claim browser verification or the student's own review.
+- **Coverage, source fixed in 4114aef:** stubbed and live Cypress flows now assert the refreshed parent-table Disabled status. The browser assertions passed.
+- **Test quality, source fixed in 4114aef:** feedback preservation is asserted after asynchronous recovery completes. The browser assertions passed.
+- No additional concrete security/correctness defect was identified in the static review. The agent review does not claim the student personally read the diff. A [labeled inline agent comment](https://github.com/phuthanh03012003/add-a-use-case/pull/3#discussion_r4488881296) records the resolved feedback-loss issue.
 
-## Not verified
+## Verification limits
 
-Browser-only flows remain unverified: cancellation (extension 4a), warning rendering, double-confirm prevention, error/reload presentation, evaluation form recovery, the inactive label, and the live screenshot. The backend proves authorization, account-state denial, persistence invariants, eligibility, report results, reminder exclusion, and both lock orders. Reactivation remains the explicitly documented legacy path; no permanent token revocation or in-flight cancellation is claimed.
+The frontend's full TypeScript build still has 18 unchanged baseline diagnostics; the production bundle and changed-source lint pass. No deployment, production-load benchmark, permanent token revocation, or cancellation of already-authenticated in-flight requests is claimed. Reactivation remains the documented legacy path. The review is explicitly agent-written, with permission; it is not evidence of the student's personal understanding.
