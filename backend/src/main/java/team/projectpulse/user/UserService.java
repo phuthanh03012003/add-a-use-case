@@ -37,6 +37,16 @@ public class UserService implements UserDetailsService {
         return this.userRepository.findByEmail(email).isPresent();
     }
 
+    /**
+     * Read committed account state rather than a possibly managed user or a token's old claims.
+     * A separate transaction also avoids inheriting a caller's older repeatable-read snapshot.
+     */
+    @org.springframework.transaction.annotation.Transactional(
+            readOnly = true, propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
+    public boolean isAccountEnabled(Integer userId) {
+        return userId != null && userId > 0 && this.userRepository.existsByIdAndEnabledTrue(userId);
+    }
+
     public void resetPassword(Map<String, String> resetPasswordInfo) {
         String email = resetPasswordInfo.get("email");
         String token = resetPasswordInfo.get("token");

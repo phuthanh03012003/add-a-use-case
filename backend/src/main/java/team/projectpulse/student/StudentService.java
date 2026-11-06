@@ -6,6 +6,8 @@ import team.projectpulse.system.UserUtils;
 import team.projectpulse.system.exception.ObjectNotFoundException;
 import team.projectpulse.user.userinvitation.UserInvitationService;
 import jakarta.transaction.Transactional;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -28,13 +30,16 @@ public class StudentService {
     private final PasswordEncoder passwordEncoder;
     private final UserUtils userUtils;
 
+    private final EntityManager entityManager;
 
-    public StudentService(StudentRepository studentRepository, SectionRepository sectionRepository, UserInvitationService userInvitationService, PasswordEncoder passwordEncoder, UserUtils userUtils) {
+
+    public StudentService(StudentRepository studentRepository, SectionRepository sectionRepository, UserInvitationService userInvitationService, PasswordEncoder passwordEncoder, UserUtils userUtils, EntityManager entityManager) {
         this.studentRepository = studentRepository;
         this.sectionRepository = sectionRepository;
         this.userInvitationService = userInvitationService;
         this.passwordEncoder = passwordEncoder;
         this.userUtils = userUtils;
+        this.entityManager = entityManager;
     }
 
     public Page<Student> findByCriteria(Map<String, String> searchCriteria, Pageable pageable) {
@@ -74,6 +79,21 @@ public class StudentService {
     public Student findStudentById(Integer studentId) {
         return this.studentRepository.findById(studentId)
                 .orElseThrow(() -> new ObjectNotFoundException("student", studentId));
+    }
+
+    /**
+     * Shared with evaluation creation: serialize account-state changes and new evaluations through commit.
+     * Refresh under the lock because a DTO converter may have already loaded an older managed Student.
+     * Callers still enforce the operation's ownership/team scope and evaluatee eligibility.
+     */
+    public Student findStudentForUpdate(Integer studentId) {
+        Student student = findStudentById(studentId);
+        lockAndRefresh(student);
+        return student;
+    }
+
+    private void lockAndRefresh(Student student) {
+        this.entityManager.refresh(student, LockModeType.PESSIMISTIC_WRITE);
     }
 
     public List<Student> findStudentsByTeamId(Integer teamId) {
