@@ -1,8 +1,30 @@
 package team.projectpulse.student;
 
 import org.springframework.data.jpa.domain.Specification;
+import team.projectpulse.section.Section;
 
 public class StudentSpecs {
+
+    public static Specification<Student> hasId(Integer id) {
+        return (root, query, cb) -> cb.equal(root.get("id"), id);
+    }
+
+    /** BR-student-lifecycle and BR-section-scoped-access; scope never comes from request fields. */
+    public static Specification<Student> managedBy(Integer callerId, boolean admin, boolean instructor) {
+        return (root, query, cb) -> {
+            if (callerId == null || (!admin && !instructor)) return cb.disjunction();
+            var owner = admin
+                    ? cb.equal(root.get("section").get("course").get("courseAdmin").get("id"), callerId)
+                    : cb.disjunction();
+            if (!instructor) return owner;
+            var assigned = query.subquery(Integer.class);
+            var section = assigned.from(Section.class);
+            assigned.select(cb.literal(1)).where(
+                    cb.equal(section.get("sectionId"), root.get("section").get("sectionId")),
+                    cb.equal(section.join("instructors").get("id"), callerId));
+            return cb.or(owner, cb.exists(assigned));
+        };
+    }
 
     public static Specification<Student> containsFirstName(String providedFirstName) {
         return (root, query, criteriaBuilder) ->

@@ -31,6 +31,13 @@ public class StudentSecurityService {
         return studentId.equals(studentIdFromJwt);
     }
 
+    public boolean canManageStudent(Integer studentId) {
+        Integer callerId = this.userUtils.getUserId();
+        if (studentId == null || studentId <= 0 || callerId == null) return false;
+        return this.studentRepository.exists(StudentSpecs.hasId(studentId).and(StudentSpecs.managedBy(
+                callerId, this.userUtils.hasRole("ROLE_admin"), this.userUtils.hasRole("ROLE_instructor"))));
+    }
+
     /**
      * Check if the user is the instructor of the section that the student is in
      *

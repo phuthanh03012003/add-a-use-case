@@ -9,6 +9,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.oauth2.jwt.JwtValidationException;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
@@ -32,13 +33,15 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.httpBasic;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
  * Shared trunk only. Committed account fixtures are cleaned explicitly because tokens and independent
  * transactions must see actual commits (FR-SEC-active-account and stu.md's locking contract).
- * HTTP bearer rejection is tested when the separate security wiring commit installs the validator.
+ * The security wiring commit adds HTTP bearer rejection to the shared validator checks.
  */
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
 class StudentAccountStateIntegrationTest extends AbstractIntegrationTest {
@@ -90,7 +93,14 @@ class StudentAccountStateIntegrationTest extends AbstractIntegrationTest {
         this.transactions.executeWithoutResult(status ->
                 this.studentService.findStudentForUpdate(this.studentId).setEnabled(false));
 
-        assertThat(this.validator.validate(this.jwtDecoder.decode(raw)).hasErrors()).isTrue();
+        assertThat(this.validator.validate(token).hasErrors()).isTrue();
+        assertThatThrownBy(() -> this.jwtDecoder.decode(raw)).isInstanceOf(JwtValidationException.class);
+        this.mockMvc.perform(get(this.baseUrl + "/students/" + this.studentId)
+                        .header("Authorization", "Bearer " + raw))
+                .andExpect(status().isUnauthorized()).andExpect(jsonPath("$.code").value(401));
+        this.mockMvc.perform(put(this.baseUrl + "/students/" + this.studentId)
+                        .header("Authorization", "Bearer " + raw).contentType("application/json").content("{}"))
+                .andExpect(status().isUnauthorized()).andExpect(jsonPath("$.flag").value(false));
         this.mockMvc.perform(post(this.baseUrl + "/users/login").with(httpBasic(this.email, "Abc12345")))
                 .andExpect(status().isUnauthorized()).andExpect(jsonPath("$.flag").value(false))
                 .andExpect(jsonPath("$.code").value(401));
